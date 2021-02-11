@@ -7,21 +7,10 @@ import re
 fileorig = 'DSDPlus.event'
 rorig = ''
 rdest = ''
+talkgroup = 0
 
-dsdfile = open(fileorig, 'r', encoding="UTF-8")
+dsdfile = open(fileorig, 'r', encoding="UTF-8", errors='ignore')
 graphile = open('DSDPlus.gexf','w', encoding="UTF-8")
-
-# print .gexf header
-graphile.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-graphile.write('<gexf xmlns:viz="http://www.gexf.net/1.3/viz" version="1.3" xmlns="http://www.gexf.net/1.3">\n')
-graphile.write('<meta lastmodifieddate="2010-03-03+23:44">')
-graphile.write('<creator>DSDGraph</creator>\n')
-graphile.write('</meta>\n')
-graphile.write('<graph defaultedgetype="undirected" idtype="string" type="static">\n')
-graphile.write('<attributes class="edge">\n')
-graphile.write('<attribute id="0" title="msg_type" type="string">\n')
-graphile.write('<default>"unspec"</default>\n')
-graphile.write('</attribute>\n</attributes>\n')
 
 node = []
 edge = []
@@ -29,11 +18,12 @@ comtype = []
 tgt = re.compile('(Tgt|TG)=\d{1,7}')
 src = re.compile('(Src|RID)=\d{1,7}')
 
+
 # scan the file
 for line in dsdfile:
-	print(line, " - ")
-	e_date = line[:11:]
-	e_time = line[13:22:]
+	e_date = line[:10:]
+	e_date = e_date.replace("/","-",)
+	e_time = line[12:20:]
 	what = line[22::]
 	events = what.split(';')
 	if events[0] != what:
@@ -48,19 +38,24 @@ for line in dsdfile:
 		if orig:
 			rorig = orig.group()[4::]	
 			print('Origin: ', rorig, end='')
-			if rorig not in node:
-				node.append(rorig)
+			if [rorig,0] not in node:
+				node.append([rorig,0])
 		
 		# add TGT if not already in list
 		dest = tgt.search(msgdetails)
 		if dest:
 			if (msgtype == 'Group call') or (msgtype == 'Enc Group call'):
 				rdest = dest.group()[3::]
+				talkgroup = 1
 			else: 
 				rdest = dest.group()[4::]
-			print(' Destination: ', rdest)
-			if rdest not in node:
-				node.append(rdest)
+				talkgroup = 0
+			print(' Destination: ', rdest, end='')
+			if [rdest,talkgroup] not in node:
+				node.append([rdest,talkgroup])
+				print('  - appending: ', rdest, '-', talkgroup, '\n')
+			else:
+				print('\n')
 		# store edge in list
 		weight = 1
 		if msgtype == 'LRRP':
@@ -74,19 +69,40 @@ for line in dsdfile:
 		elif msgtype == 'Enc Group call':
 			weight = 8
 
+		tstamp = e_date + 'T' + e_time
 		if (rorig != '') and (rdest != ''):
-			oridx = node.index(rorig)
-			deidx = node.index(rdest)
+			oridx = node.index([rorig,0])
+			deidx = node.index([rdest,talkgroup])
 			typeidx = comtype.index(msgtype)
-			edge.append([oridx, deidx, weight, typeidx])
-		
+			edge.append([oridx, deidx, weight, typeidx, tstamp])
+
+# print .gexf header
+graphile.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+graphile.write('<gexf xmlns:viz="http://www.gexf.net/1.3/viz" version="1.3" xmlns="http://www.gexf.net/1.3">\n')
+graphile.write('<meta lastmodifieddate="2021-02-11+16:00">')
+graphile.write('<creator>DSDGraph</creator>\n')
+graphile.write('</meta>\n')
+graphile.write('<graph defaultedgetype="directed" idtype="string" mode="dynamic" timeformat="datetime" start="')
+graphile.write(str(edge[0][4]))
+graphile.write('" end="')
+graphile.write(str(edge[-1][4]))
+graphile.write('">\n')
+graphile.write('<attributes class="node">\n')
+graphile.write('     <attribute id="0" title="talkgroup" type="boolean">\n')
+graphile.write('<default>0</default>\n</attribute>\n')
+graphile.write('</attributes>\n')
+graphile.write('<attributes class="edge">\n')
+graphile.write('     <attribute id="0" title="msg_type" type="string">\n')
+graphile.write('<default>"unspec"</default>\n</attribute>\n')
+graphile.write('</attributes>\n')
+			
 # dump nodes into file
 graphile.write('<nodes count="')
 graphile.write(str(len(node)))
 graphile.write('">\n')
 for x in range(len(node)):
-	#print(node[x])
-	nodeentry = '<node id="' + str(x) + '.0" label="' + node[x] + '"/>\n'
+	print(x, ' - ', node[x], ' > ')
+	nodeentry = '<node id="' + str(x) + '.0" label="' + str(node[x][0]) + '">\n   <attvalues><attvalue for="0" value="' +str(node[x][1]) + '"/></attvalues>\n</node>\n'
 	graphile.write(nodeentry)
 graphile.write('</nodes>\n')
 
@@ -96,8 +112,7 @@ graphile.write(str(len(edge)))
 graphile.write('">\n')
 for x in range(len(edge)):
 	#print(edge[x])
-	#edgeentry = '<edge id="' + str(x) + '.0" source="' + str(edge[x][0]) + '.0" target="' + str(edge[x][1]) + '.0" weight="' + str(edge[x][2]) + '.0"/>\n'
-	edgeentry = '<edge id="' + str(x) + '.0" source="' + str(edge[x][0]) + '.0" target="' + str(edge[x][1]) + '.0" weight="' + str(edge[x][2]) + '.0">\n' + '<attvalues><attvalue for="0" value="' + comtype[edge[x][3]] + '"/></attvalues></edge>'
+	edgeentry = '<edge id="' + str(x) + '.0" source="' + str(edge[x][0]) + '.0" target="' + str(edge[x][1]) + '.0" weight="' + str(edge[x][2]) + '.0" start="'+ str(edge[x][4]) + '" end="' + str(edge[x][4]) + '">\n' + '<attvalues><attvalue for="0" value="' + comtype[edge[x][3]] + '"/></attvalues></edge>\n'
 	graphile.write(edgeentry)
 graphile.write('</edges>\n')
 
