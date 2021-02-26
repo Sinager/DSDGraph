@@ -15,9 +15,9 @@ graphile = open('DSDPlus.gexf','w', encoding="UTF-8")
 node = []
 edge = []
 comtype = []
-tgt = re.compile('(Tgt|TG)=\d{1,7}')
-src = re.compile('(Src|RID)=\d{1,7}')
-
+tgt = re.compile('(Tgt|TG)=\w{1,7}')
+src = re.compile('(Src|RID)=\w{1,7}')
+alg = re.compile('Alg=\w{2,6}')
 
 # scan the file
 for line in dsdfile:
@@ -68,13 +68,23 @@ for line in dsdfile:
 			weight = 8
 		elif msgtype == 'Enc Group call':
 			weight = 8
+		
+		encryption = alg.search(msgdetails)
+		if (encryption == None):
+			encr = 'clear'
+		else:
+			encr = encryption.group(0)[4::]
+	
+		
+		print('Encryption: ', encr)
 
+			
 		tstamp = e_date + 'T' + e_time
 		if (rorig != '') and (rdest != ''):
 			oridx = node.index([rorig,0])
 			deidx = node.index([rdest,talkgroup])
 			typeidx = comtype.index(msgtype)
-			edge.append([oridx, deidx, weight, typeidx, tstamp])
+			edge.append([oridx, deidx, weight, typeidx, tstamp, encr])
 
 # print .gexf header
 graphile.write('<?xml version="1.0" encoding="UTF-8"?>\n')
@@ -94,6 +104,8 @@ graphile.write('</attributes>\n')
 graphile.write('<attributes class="edge">\n')
 graphile.write('     <attribute id="0" title="msg_type" type="string">\n')
 graphile.write('<default>"unspec"</default>\n</attribute>\n')
+graphile.write('     <attribute id="1" title="encryption" type="string">\n')
+graphile.write('<default>"clear"</default>\n</attribute>\n')
 graphile.write('</attributes>\n')
 			
 # dump nodes into file
@@ -112,11 +124,10 @@ graphile.write(str(len(edge)))
 graphile.write('">\n')
 for x in range(len(edge)):
 	#print(edge[x])
-	edgeentry = '<edge id="' + str(x) + '.0" source="' + str(edge[x][0]) + '.0" target="' + str(edge[x][1]) + '.0" weight="' + str(edge[x][2]) + '.0" start="'+ str(edge[x][4]) + '" end="' + str(edge[x][4]) + '">\n' + '<attvalues><attvalue for="0" value="' + comtype[edge[x][3]] + '"/></attvalues></edge>\n'
+	edgeentry = '<edge id="' + str(x) + '.0" source="' + str(edge[x][0]) + '.0" target="' + str(edge[x][1]) + '.0" weight="' + str(edge[x][2]) + '.0" start="'+ str(edge[x][4]) + '" end="' + str(edge[x][4]) + '">\n' + '<attvalues>\n   <attvalue for="0" value="' + comtype[edge[x][3]] + '"/>\n   <attvalue for="1" value="' + str(edge[x][5]) + '"/>\n</attvalues></edge>\n'
 	graphile.write(edgeentry)
 graphile.write('</edges>\n')
 
 
 graphile.write('</graph>\n</gexf>')
 
-print 
